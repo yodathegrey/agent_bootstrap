@@ -22,7 +22,11 @@
 11. [Deployment Strategy](#11-deployment-strategy)
 12. [Documentation Standards](#12-documentation-standards)
 13. [Project Phases & Milestones](#13-project-phases--milestones)
-14. [Appendices](#14-appendices)
+14. [Security Hardening](#14-security-hardening-audit-remediation)
+15. [Stripe Billing Integration](#15-stripe-billing-integration)
+16. [Updated Page Map](#16-updated-page-map)
+17. [Updated Project Phases (Stripe)](#17-updated-project-phases-stripe-integration)
+18. [Appendices](#18-appendices)
 
 ---
 
@@ -725,7 +729,274 @@ Push to main ──► GitHub Actions ──► Lint + Test ──► Build cont
 
 ---
 
-## 14. Appendices
+## 14. Security Hardening (Audit Remediation)
+
+The following items address gaps identified during the security audit and must be incorporated into the relevant phases.
+
+### 14.1 Network & Infrastructure
+
+| Gap | Remediation |
+|---|---|
+| No VPC / network segmentation | Deploy all Cloud Run services with **VPC Connector** into a private VPC. Only the API Gateway has a public ingress; all internal services use **Private Google Access** and internal-only Cloud Run URLs. |
+| No WAF / DDoS protection | Enable **Cloud Armor** on the external load balancer in front of the API Gateway. Configure OWASP ModSecurity Core Rule Set + rate-based rules. |
+| Redis unencrypted at rest | Use **Memorystore for Redis (Standard tier)** with in-transit encryption enabled. Enable AUTH via Secret Manager-stored password. |
+| `curl \| bash` install pattern | Remove pipe-to-bash installer. Distribute agent runtime exclusively via signed packages (`.deb`, `.rpm`, `.pkg`, `.msi`) and verified package managers (Homebrew, WinGet, Snap). Provide SHA-256 checksums on a TLS-only download page. |
+
+### 14.2 Application Security
+
+| Gap | Remediation |
+|---|---|
+| No CSRF protection | Add **SameSite=Strict** cookies and synchronizer token pattern for any state-changing requests from the web UI. NestJS `csurf` middleware or custom double-submit cookie. |
+| No CSP headers | Configure **Content-Security-Policy**, **X-Frame-Options: DENY**, **X-Content-Type-Options: nosniff**, and **Referrer-Policy: strict-origin-when-cross-origin** on Firebase Hosting and API Gateway responses. |
+| SSE token refresh | SSE connections must include a JWT expiry check. The server closes connections whose JWT is within 60 s of expiry; the client automatically reconnects with a refreshed token. |
+| Prompt injection | Implement an **input/output guardrail layer** in the Orchestrator: (1) sanitize tool outputs before injecting into the LLM context, (2) tag untrusted content with delimiters the system prompt instructs the model to treat as data, (3) apply output classifiers to detect attempted instruction override. See ADR-003. |
+| `code-interpreter` risk | Run `code-interpreter` in a **dedicated gVisor sandbox** with no network access, 30 s timeout, 256 MB memory cap, and read-only filesystem except a scoped `/tmp`. Kill the container after each execution. |
+
+### 14.3 Data Protection
+
+| Gap | Remediation |
+|---|---|
+| No data classification | Implement a **data classification policy** (Public, Internal, Confidential, Restricted). Tag Firestore collections and memory entries with classification level. Org-level policy can block Confidential/Restricted data from being sent to external LLM providers (forces Vertex AI or self-hosted). |
+| No DLP | Add a **DLP scanning step** in the LLM Router: outbound prompts are checked against Cloud DLP API for PII (SSN, credit cards, etc.) before leaving the platform. Matches are redacted or blocked per org policy. |
+| Audit log integrity | Hash-chain audit log entries (each entry includes `SHA-256(previous_entry + current_entry)`). Export daily digests to a **write-once Cloud Storage bucket** with retention lock for tamper evidence. |
+
+### 14.4 Skill Supply-Chain Security
+
+- All skill artifacts must be **cryptographically signed** (cosign / Sigstore) before upload to Artifact Registry.
+- The Orchestrator verifies signatures at load time; unsigned or invalid skills are rejected.
+- Skill manifests declare required permissions; the platform enforces them at the sandbox level. Skills cannot request permissions not declared in their manifest.
+- Dependency scanning (Snyk / Dependabot) runs on every skill artifact before publishing.
+
+### 14.5 Additional ADRs Required
+
+- **ADR-003:** Prompt injection mitigation strategy
+- **ADR-004:** Data classification and DLP policy
+- **ADR-005:** Stripe billing integration and PCI compliance
+
+---
+
+## 15. Stripe Billing Integration
+
+### 15.1 Overview
+
+Nexus uses **Stripe** as its billing and subscription management platform. Stripe handles payment processing, subscription lifecycle, invoicing, and usage-based metering — keeping Nexus outside PCI scope via Stripe Elements (no raw card data touches Nexus servers).
+
+### 15.2 Subscription Tiers
+
+| Tier | Monthly Price | Included | Overage |
+|---|---|---|---|
+| **Starter** | $49/mo | 3 users, 5 agents, 1,000 agent runs, 500K LLM tokens | $0.05/run, $0.002/1K tokens |
+| **Team** | $199/mo | 15 users, 25 agents, 10,000 agent runs, 5M LLM tokens | $0.04/run, $0.0015/1K tokens |
+| **Enterprise** | Custom | Unlimited users/agents, custom SLA, dedicated support, SSO/SAML, data residency | Negotiated |
+
+### 15.3 Architecture
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│                         Nexus Platform                            │
+│                                                                  │
+│  ┌────────────┐    ┌──────────────────┐    ┌─────────────────┐  │
+│  │  Settings   │    │  API Gateway     │    │  Billing        │  │
+│  │  Portal     │───►│  /api/v1/billing │───►│  Service        │  │
+│  │  (Stripe    │    │                  │    │  (Cloud Run)    │  │
+│  │   Elements) │    │  /api/v1/stripe  │    │                 │  │
+│  └────────────┘    │  /webhooks       │    │  - Subscription │  │
+│                    └──────────────────┘    │    mgmt          │  │
+│  ┌────────────┐                           │  - Usage meter   │  │
+│  │  Billing    │                           │  - Invoice sync  │  │
+│  │  Splash     │                           └────────┬────────┘  │
+│  │  Page       │                                    │            │
+│  └────────────┘                                    │            │
+│                                                     ▼            │
+│                                              ┌────────────┐     │
+│                                              │  Firestore  │     │
+│                                              │  (billing   │     │
+│                                              │   state)    │     │
+│                                              └──────┬──────┘     │
+└─────────────────────────────────────────────────────┼────────────┘
+                                                      │
+                                    ┌─────────────────▼───────────┐
+                                    │         Stripe API           │
+                                    │                              │
+                                    │  - Customers                 │
+                                    │  - Subscriptions             │
+                                    │  - Payment Methods           │
+                                    │  - Usage Records             │
+                                    │  - Invoices                  │
+                                    │  - Billing Portal            │
+                                    │  - Webhooks                  │
+                                    └──────────────────────────────┘
+```
+
+### 15.4 Stripe Webhook Workflow
+
+The Billing Service exposes a webhook endpoint (`POST /api/v1/stripe/webhooks`) verified using Stripe's webhook signature (`Stripe-Signature` header + webhook secret from Secret Manager).
+
+**Critical webhook events handled:**
+
+| Event | Action |
+|---|---|
+| `checkout.session.completed` | Provision org subscription in Firestore, assign tier |
+| `customer.subscription.updated` | Update tier, adjust entitlements (users, agents, runs) |
+| `customer.subscription.deleted` | Downgrade to free/read-only mode, notify org admins |
+| `invoice.payment_succeeded` | Record payment, reset monthly usage counters |
+| `invoice.payment_failed` | Send dunning notification, enter grace period (7 days) |
+| `customer.subscription.trial_will_end` | Notify org admins 3 days before trial ends |
+
+**Webhook security:**
+
+- Signature verification using `stripe.webhooks.constructEvent()` with the signing secret.
+- Idempotency: each event includes a unique `event.id`; Firestore tracks processed events to prevent replay.
+- Webhook endpoint is rate-limited separately from main API.
+- Failed webhook processing triggers a dead-letter queue (Pub/Sub) for retry and alerting.
+
+### 15.5 Usage-Based Metering
+
+The Orchestrator emits usage events to Pub/Sub on each agent run completion:
+
+```jsonc
+{
+  "org_id": "org_abc",
+  "event": "agent_run_completed",
+  "agent_id": "sales-researcher-v2",
+  "tokens_used": { "input": 2340, "output": 890 },
+  "timestamp": "2026-03-22T14:05:00Z"
+}
+```
+
+A Cloud Function aggregates these events and reports usage to Stripe via `stripe.subscriptionItems.createUsageRecord()` for end-of-billing-cycle invoicing.
+
+### 15.6 Settings Portal — Billing Configuration
+
+Accessible at `/settings/billing` (requires `owner` or `admin` role).
+
+**Features:**
+
+| Section | Description |
+|---|---|
+| **Current Plan** | Shows active tier, renewal date, included vs. used entitlements (progress bars) |
+| **Payment Method** | Stripe Elements card input — tokenized client-side, never touches Nexus servers |
+| **Invoices** | List of past invoices with PDF download links (via Stripe Invoice API) |
+| **Usage Dashboard** | Real-time usage charts: agent runs, LLM tokens, active users — per billing cycle |
+| **Upgrade / Downgrade** | One-click tier change via Stripe Checkout Session with proration |
+| **Billing Portal** | Link to Stripe Customer Portal for self-service (update card, cancel, manage invoices) |
+| **Billing Alerts** | Configure email alerts at 50%, 80%, 100% of included usage thresholds |
+
+**Implementation:**
+
+- Payment method collection uses **Stripe Elements** (`@stripe/react-stripe-js`) — embedded directly in the settings page. Card data is tokenized by Stripe.js and sent directly to Stripe. Nexus backend never sees raw card numbers.
+- Plan changes use **Stripe Checkout Sessions** in `mode: 'subscription'` with `proration_behavior: 'always_invoice'`.
+- Self-service management uses **Stripe Customer Portal** (`stripe.billingPortal.sessions.create()`).
+
+### 15.7 Billing Splash Page
+
+Accessible at `/billing` (public, unauthenticated) and linked from the marketing site and login page.
+
+**Layout:**
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│  NEXUS — Enterprise Agent Orchestration                       │
+│                                                              │
+│  "AI agents that work the way your enterprise does."          │
+│                                                              │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐       │
+│  │   STARTER    │  │     TEAM     │  │  ENTERPRISE  │       │
+│  │              │  │              │  │              │       │
+│  │   $49/mo     │  │   $199/mo    │  │   Custom     │       │
+│  │              │  │              │  │              │       │
+│  │  3 users     │  │  15 users    │  │  Unlimited   │       │
+│  │  5 agents    │  │  25 agents   │  │  Custom SLA  │       │
+│  │  1K runs/mo  │  │  10K runs/mo │  │  SSO/SAML    │       │
+│  │  500K tokens │  │  5M tokens   │  │  Dedicated   │       │
+│  │              │  │              │  │  support     │       │
+│  │ [Start Free  │  │ [Start Free  │  │ [Contact     │       │
+│  │  Trial]      │  │  Trial]      │  │  Sales]      │       │
+│  └──────────────┘  └──────────────┘  └──────────────┘       │
+│                                                              │
+│  ── Feature Comparison Table ──                              │
+│  ── FAQ Section ──                                           │
+│  ── "Trusted by" logos ──                                    │
+│                                                              │
+│  [Sign Up Free — 14-day trial, no credit card required]      │
+└──────────────────────────────────────────────────────────────┘
+```
+
+**Key elements:**
+
+- Tier comparison cards with clear CTAs → Stripe Checkout Session
+- Feature comparison matrix (agents, skills, LLM providers, support level, SLA)
+- FAQ addressing common billing questions (proration, cancellation, data retention on downgrade)
+- 14-day free trial with no credit card (card collected at conversion via Stripe Checkout)
+- Enterprise tier links to a contact form / Calendly scheduling
+
+### 15.8 PCI Compliance
+
+Nexus maintains **PCI DSS SAQ-A** compliance (the lightest level) because:
+
+- All payment data is collected via **Stripe Elements** (Stripe-hosted iframes).
+- No card numbers, CVVs, or sensitive auth data are transmitted to, processed by, or stored on Nexus infrastructure.
+- The Stripe.js library loads from `js.stripe.com` — a PCI Level 1 certified origin.
+- The Billing Service only stores Stripe Customer IDs and Subscription IDs (non-sensitive tokens) in Firestore.
+
+### 15.9 Stripe Configuration Secrets
+
+| Secret | Stored In | Used By |
+|---|---|---|
+| `STRIPE_SECRET_KEY` | Secret Manager | Billing Service (server-side) |
+| `STRIPE_PUBLISHABLE_KEY` | Build-time env var | Frontend (client-side, safe to expose) |
+| `STRIPE_WEBHOOK_SECRET` | Secret Manager | API Gateway webhook endpoint |
+| `STRIPE_PRICE_ID_STARTER` | Firestore `/config/billing` | Billing Service |
+| `STRIPE_PRICE_ID_TEAM` | Firestore `/config/billing` | Billing Service |
+
+---
+
+## 16. Updated Page Map
+
+The frontend page map (Section 9.2) is extended with billing pages:
+
+```
+/billing               — Public billing splash page (pricing tiers, feature comparison, CTAs)
+/settings/billing      — Billing settings (current plan, payment method, invoices, usage)
+/settings/billing/usage — Detailed usage analytics (agent runs, tokens, per-agent breakdown)
+/settings/stripe       — Stripe integration configuration (admin: webhook status, key rotation)
+```
+
+---
+
+## 17. Updated Project Phases (Stripe Integration)
+
+Stripe integration items are added to existing phases:
+
+**Phase 1 — Foundation (add):**
+
+- [ ] Stripe account setup + API key provisioning in Secret Manager
+- [ ] Firestore billing schema: `/orgs/{orgId}/billing/`, `/orgs/{orgId}/invoices/`
+- [ ] Billing splash page (static, deployed with frontend)
+
+**Phase 2 — Agent Engine (add):**
+
+- [ ] Billing Service (Cloud Run) — Stripe Customer + Subscription CRUD
+- [ ] Stripe webhook endpoint with signature verification
+- [ ] Settings portal billing tab (Stripe Elements for payment, plan display)
+
+**Phase 3 — Multi-Agent & Workflows (add):**
+
+- [ ] Usage metering pipeline (Pub/Sub → Cloud Function → Stripe Usage Records)
+- [ ] Usage dashboard in settings portal
+- [ ] Billing alerts (50%, 80%, 100% thresholds)
+- [ ] Stripe Customer Portal integration
+
+**Phase 5 — Hardening (add):**
+
+- [ ] PCI SAQ-A self-assessment completion
+- [ ] Stripe webhook failure alerting + dead-letter queue monitoring
+- [ ] Billing load testing (simulate subscription churn, usage spikes)
+- [ ] ADR-005: Stripe billing integration and PCI compliance
+
+---
+
+## 18. Appendices
 
 ### A. Repository Structure
 
