@@ -1,0 +1,32 @@
+{
+  "skill_id": "calendar-manage",
+  "version": "1.0.0",
+  "display_name": "Calendar Manager",
+  "description": "Manages calendar events (list, create, delete).",
+  "author": "nexus-core",
+  "license": "proprietary",
+  "platforms": ["linux", "macos", "windows"],
+  "runtime": "python",
+  "entry_point": "calendar_manage:execute",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "action": { "type": "string", "enum": ["list", "create", "delete"], "description": "Calendar action to perform" },
+      "date": { "type": "string", "description": "Date in YYYY-MM-DD format" },
+      "title": { "type": "string", "description": "Event title" },
+      "description": { "type": "string", "description": "Event description" },
+      "event_id": { "type": "string", "description": "Event ID for deletion" }
+    },
+    "required": ["action"]
+  },
+  "output_schema": {
+    "type": "object",
+    "properties": {
+      "success": { "type": "boolean" },
+      "events": { "type": "array" },
+      "error": { "type": "string" }
+    }
+  },
+  "permissions": ["calendar:read", "calendar:write"],
+  "dependencies": ["httpx>=0.27"]
+}

@@ -1,0 +1,29 @@
+{
+  "skill_id": "file-reader",
+  "version": "1.0.0",
+  "display_name": "File Reader",
+  "description": "Reads and parses local files (TXT, JSON, CSV).",
+  "author": "nexus-core",
+  "license": "proprietary",
+  "platforms": ["linux", "macos", "windows"],
+  "runtime": "python",
+  "entry_point": "file_reader:execute",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "file_path": { "type": "string", "description": "Path to the file to read" },
+      "format": { "type": "string", "enum": ["auto", "txt", "json", "csv"], "default": "auto", "description": "File format" }
+    },
+    "required": ["file_path"]
+  },
+  "output_schema": {
+    "type": "object",
+    "properties": {
+      "content": { "type": "string" },
+      "format": { "type": "string" },
+      "size_bytes": { "type": "integer" }
+    }
+  },
+  "permissions": ["filesystem:read"],
+  "dependencies": []
+}

@@ -1,0 +1,31 @@
+{
+  "skill_id": "email-send",
+  "version": "1.0.0",
+  "display_name": "Email Send",
+  "description": "Sends emails via SMTP.",
+  "author": "nexus-core",
+  "license": "proprietary",
+  "platforms": ["linux", "macos", "windows"],
+  "runtime": "python",
+  "entry_point": "email_send:execute",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "to": { "type": "string", "description": "Recipient email address" },
+      "subject": { "type": "string", "description": "Email subject" },
+      "body": { "type": "string", "description": "Email body" },
+      "html": { "type": "boolean", "default": false, "description": "Send as HTML email" }
+    },
+    "required": ["to", "subject", "body"]
+  },
+  "output_schema": {
+    "type": "object",
+    "properties": {
+      "success": { "type": "boolean" },
+      "message_id": { "type": "string" },
+      "error": { "type": "string" }
+    }
+  },
+  "permissions": ["email:send"],
+  "dependencies": []
+}

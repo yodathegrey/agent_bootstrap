@@ -1,0 +1,100 @@
+syntax = "proto3";
+
+package nexus.memory;
+
+option go_package = "github.com/nexus/proto/memory";
+
+// Memory service for kernel (session) and long-term memory operations.
+
+service MemoryService {
+  // Read kernel memory for an active session.
+  rpc GetKernelMemory(GetKernelMemoryRequest) returns (KernelMemory);
+
+  // Update kernel memory during a session.
+  rpc UpdateKernelMemory(UpdateKernelMemoryRequest) returns (UpdateKernelMemoryResponse);
+
+  // Query long-term memory using vector similarity.
+  rpc QueryLongTermMemory(QueryLongTermMemoryRequest) returns (QueryLongTermMemoryResponse);
+
+  // Write a long-term memory entry (typically from the summarizer).
+  rpc WriteLongTermMemory(WriteLongTermMemoryRequest) returns (WriteLongTermMemoryResponse);
+
+  // Flush kernel memory on session close.
+  rpc FlushKernelMemory(FlushKernelMemoryRequest) returns (FlushKernelMemoryResponse);
+}
+
+message KernelMemory {
+  string session_id = 1;
+  string agent_id = 2;
+  string scratchpad = 3;
+  repeated TurnSummary turn_history = 4;
+  int64 created_at_ms = 5;
+  int64 last_active_ms = 6;
+  int32 token_budget_remaining = 7;
+}
+
+message TurnSummary {
+  string role = 1;
+  string summary = 2;
+}
+
+message GetKernelMemoryRequest {
+  string session_id = 1;
+}
+
+message UpdateKernelMemoryRequest {
+  string session_id = 1;
+  string scratchpad = 2;
+  TurnSummary new_turn = 3;
+  int32 token_budget_remaining = 4;
+}
+
+message UpdateKernelMemoryResponse {
+  bool success = 1;
+}
+
+message QueryLongTermMemoryRequest {
+  string org_id = 1;
+  string agent_id = 2;
+  string query_text = 3;
+  int32 top_k = 4;
+  repeated string tag_filters = 5;
+}
+
+message LongTermMemoryEntry {
+  string memory_id = 1;
+  string agent_id = 2;
+  string user_id = 3;
+  string summary = 4;
+  repeated string tags = 5;
+  float relevance_score = 6;
+  int64 created_at_ms = 7;
+}
+
+message QueryLongTermMemoryResponse {
+  repeated LongTermMemoryEntry entries = 1;
+}
+
+message WriteLongTermMemoryRequest {
+  string org_id = 1;
+  string agent_id = 2;
+  string user_id = 3;
+  string summary = 4;
+  repeated string tags = 5;
+  int64 ttl_ms = 6;
+}
+
+message WriteLongTermMemoryResponse {
+  string memory_id = 1;
+  bool success = 2;
+}
+
+message FlushKernelMemoryRequest {
+  string session_id = 1;
+  bool summarize_before_flush = 2;
+}
+
+message FlushKernelMemoryResponse {
+  bool success = 1;
+  string long_term_memory_id = 2;
+}

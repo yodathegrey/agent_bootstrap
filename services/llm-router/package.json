@@ -1,0 +1,29 @@
+{
+  "name": "@nexus/llm-router",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "rm -rf dist && tsc -p tsconfig.json",
+    "dev": "tsc --watch & node --watch dist/main.js",
+    "start": "node dist/main.js",
+    "lint": "echo ok",
+    "test": "echo ok"
+  },
+  "dependencies": {
+    "express": "^4.21.0",
+    "@anthropic-ai/sdk": "^0.39.0",
+    "openai": "^4.77.0",
+    "@google-cloud/pubsub": "^4.9.0",
+    "pino": "^9.6.0",
+    "pino-pretty": "^13.0.0",
+    "cors": "^2.8.5",
+    "helmet": "^8.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0",
+    "@types/node": "^22.10.0",
+    "@types/express": "^5.0.0",
+    "@types/cors": "^2.8.17"
+  }
+}

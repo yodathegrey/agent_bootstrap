@@ -1,0 +1,1 @@
+{ "name": "@nexus/load-tests", "private": true, "scripts": { "test:health": "k6 run health.js", "test:agents": "k6 run agents.js", "test:sessions": "k6 run sessions.js", "test:full": "k6 run full-load.js" } }

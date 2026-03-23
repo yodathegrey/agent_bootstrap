@@ -1,0 +1,29 @@
+{
+  "skill_id": "shell-exec",
+  "version": "1.0.0",
+  "display_name": "Shell Executor",
+  "description": "Executes shell commands from an allow-list and returns output.",
+  "author": "nexus-core",
+  "license": "proprietary",
+  "platforms": ["linux", "macos", "windows"],
+  "runtime": "python",
+  "entry_point": "shell_exec:execute",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "command": { "type": "string", "description": "Shell command to execute" },
+      "timeout_seconds": { "type": "integer", "default": 30, "description": "Timeout in seconds" }
+    },
+    "required": ["command"]
+  },
+  "output_schema": {
+    "type": "object",
+    "properties": {
+      "stdout": { "type": "string" },
+      "stderr": { "type": "string" },
+      "exit_code": { "type": "integer" }
+    }
+  },
+  "permissions": ["shell:execute"],
+  "dependencies": []
+}

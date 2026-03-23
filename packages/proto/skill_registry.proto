@@ -1,0 +1,86 @@
+syntax = "proto3";
+
+package nexus.skill;
+
+option go_package = "github.com/nexus/proto/skill";
+
+// Skill registry service for managing and resolving skills.
+
+service SkillRegistryService {
+  // Register a new skill.
+  rpc RegisterSkill(RegisterSkillRequest) returns (RegisterSkillResponse);
+
+  // List available skills for an organization.
+  rpc ListSkills(ListSkillsRequest) returns (ListSkillsResponse);
+
+  // Get a specific skill by ID.
+  rpc GetSkill(GetSkillRequest) returns (SkillManifest);
+
+  // Resolve skills needed for an agent session.
+  rpc ResolveSkills(ResolveSkillsRequest) returns (ResolveSkillsResponse);
+
+  // Uninstall a skill.
+  rpc UninstallSkill(UninstallSkillRequest) returns (UninstallSkillResponse);
+}
+
+message SkillManifest {
+  string skill_id = 1;
+  string version = 2;
+  string display_name = 3;
+  string description = 4;
+  string author = 5;
+  string license = 6;
+  repeated string platforms = 7;
+  string runtime = 8;        // python | node | wasm
+  string entry_point = 9;
+  string input_schema_json = 10;
+  string output_schema_json = 11;
+  repeated string permissions = 12;
+  repeated string dependencies = 13;
+}
+
+message RegisterSkillRequest {
+  string org_id = 1;
+  SkillManifest manifest = 2;
+  bytes artifact = 3;
+}
+
+message RegisterSkillResponse {
+  string skill_id = 1;
+  string version = 2;
+  bool success = 3;
+}
+
+message ListSkillsRequest {
+  string org_id = 1;
+  string platform_filter = 2;
+  string runtime_filter = 3;
+}
+
+message ListSkillsResponse {
+  repeated SkillManifest skills = 1;
+}
+
+message GetSkillRequest {
+  string skill_id = 1;
+  string version = 2;
+}
+
+message ResolveSkillsRequest {
+  repeated string skill_ids = 1;
+  string target_platform = 2;
+}
+
+message ResolveSkillsResponse {
+  repeated SkillManifest resolved = 1;
+  repeated string unresolved = 2;
+}
+
+message UninstallSkillRequest {
+  string org_id = 1;
+  string skill_id = 2;
+}
+
+message UninstallSkillResponse {
+  bool success = 1;
+}

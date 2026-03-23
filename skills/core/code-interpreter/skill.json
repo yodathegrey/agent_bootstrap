@@ -1,0 +1,31 @@
+{
+  "skill_id": "code-interpreter",
+  "version": "1.0.0",
+  "display_name": "Code Interpreter",
+  "description": "Executes Python or JavaScript code in a sandboxed environment.",
+  "author": "nexus-core",
+  "license": "proprietary",
+  "platforms": ["linux", "macos"],
+  "runtime": "python",
+  "entry_point": "code_interpreter:execute",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "code": { "type": "string", "description": "Code to execute" },
+      "language": { "type": "string", "enum": ["python", "javascript"], "default": "python", "description": "Programming language" },
+      "timeout_seconds": { "type": "integer", "default": 30, "description": "Timeout in seconds" }
+    },
+    "required": ["code"]
+  },
+  "output_schema": {
+    "type": "object",
+    "properties": {
+      "stdout": { "type": "string" },
+      "stderr": { "type": "string" },
+      "exit_code": { "type": "integer" },
+      "result": { "type": "string" }
+    }
+  },
+  "permissions": ["code:execute"],
+  "dependencies": []
+}

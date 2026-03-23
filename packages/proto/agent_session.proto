@@ -1,0 +1,97 @@
+syntax = "proto3";
+
+package nexus.agent;
+
+option go_package = "github.com/nexus/proto/agent";
+
+// Agent session management between API Gateway and Orchestrator.
+
+service AgentSessionService {
+  // Create a new agent session.
+  rpc CreateSession(CreateSessionRequest) returns (CreateSessionResponse);
+
+  // Send a message to an active agent session.
+  rpc SendMessage(SendMessageRequest) returns (stream AgentEvent);
+
+  // Cancel a running session.
+  rpc CancelSession(CancelSessionRequest) returns (CancelSessionResponse);
+
+  // Get session status.
+  rpc GetSessionStatus(GetSessionStatusRequest) returns (SessionStatus);
+}
+
+enum SessionState {
+  SESSION_STATE_UNSPECIFIED = 0;
+  DEFINED = 1;
+  PROVISIONING = 2;
+  READY = 3;
+  RUNNING = 4;
+  COMPLETING = 5;
+  ARCHIVED = 6;
+  ERRORED = 7;
+  CANCELLED = 8;
+}
+
+message CreateSessionRequest {
+  string org_id = 1;
+  string agent_id = 2;
+  string user_id = 3;
+  map<string, string> inputs = 4;
+}
+
+message CreateSessionResponse {
+  string session_id = 1;
+  SessionState state = 2;
+}
+
+message SendMessageRequest {
+  string session_id = 1;
+  string content = 2;
+}
+
+message AgentEvent {
+  string session_id = 1;
+  oneof event {
+    TextDelta text_delta = 2;
+    ToolUse tool_use = 3;
+    ToolResult tool_result = 4;
+    SessionStatus status_update = 5;
+  }
+}
+
+message TextDelta {
+  string text = 1;
+}
+
+message ToolUse {
+  string tool_id = 1;
+  string tool_name = 2;
+  string input_json = 3;
+}
+
+message ToolResult {
+  string tool_id = 1;
+  string output = 2;
+  bool is_error = 3;
+}
+
+message CancelSessionRequest {
+  string session_id = 1;
+}
+
+message CancelSessionResponse {
+  SessionState state = 1;
+}
+
+message GetSessionStatusRequest {
+  string session_id = 1;
+}
+
+message SessionStatus {
+  string session_id = 1;
+  SessionState state = 2;
+  string agent_id = 3;
+  int32 turns_completed = 4;
+  int64 started_at_ms = 5;
+  int64 last_active_ms = 6;
+}

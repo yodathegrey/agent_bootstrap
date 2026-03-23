@@ -1,0 +1,29 @@
+{
+  "skill_id": "doc-summarizer",
+  "version": "1.0.0",
+  "display_name": "Document Summarizer",
+  "description": "Summarizes long documents using the configured LLM.",
+  "author": "nexus-core",
+  "license": "proprietary",
+  "platforms": ["linux", "macos", "windows"],
+  "runtime": "python",
+  "entry_point": "doc_summarizer:execute",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "text": { "type": "string", "description": "Text to summarize" },
+      "max_length": { "type": "integer", "default": 500, "description": "Maximum summary length in words" }
+    },
+    "required": ["text"]
+  },
+  "output_schema": {
+    "type": "object",
+    "properties": {
+      "summary": { "type": "string" },
+      "original_length": { "type": "integer" },
+      "summary_length": { "type": "integer" }
+    }
+  },
+  "permissions": ["network:outbound"],
+  "dependencies": ["httpx>=0.27"]
+}

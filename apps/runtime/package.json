@@ -1,0 +1,27 @@
+{
+  "name": "@nexus/runtime",
+  "version": "0.1.0",
+  "description": "Cross-platform agent runtime that connects to the Nexus cloud hub",
+  "type": "module",
+  "bin": {
+    "nexus-runtime": "./dist/main.js"
+  },
+  "scripts": {
+    "build": "rm -rf dist && tsc -p tsconfig.json",
+    "start": "node dist/main.js",
+    "lint": "echo ok",
+    "test": "echo ok"
+  },
+  "dependencies": {
+    "@grpc/grpc-js": "^1.10.0",
+    "@grpc/proto-loader": "^0.7.12",
+    "conf": "^12.0.0",
+    "node-forge": "^1.3.1",
+    "pino": "^9.0.0",
+    "pino-pretty": "^11.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.5.0"
+  }
+}

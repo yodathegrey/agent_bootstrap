@@ -1,0 +1,22 @@
+{
+  "name": "@nexus/shared-types",
+  "version": "0.1.0",
+  "description": "Shared TypeScript type definitions for the Nexus monorepo",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf dist"
+  },
+  "files": [
+    "dist"
+  ],
+  "license": "UNLICENSED"
+}
